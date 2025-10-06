@@ -2,7 +2,8 @@ import pickle
 from concurrent.futures import ProcessPoolExecutor
 from itertools import chain
 
-import pandas as pd   
+import pandas as pd
+
 
 # --- top-level worker so it's picklable ---
 def _rows_for_gene(args):
@@ -10,8 +11,10 @@ def _rows_for_gene(args):
     base = [gene[k] for k in gene_cols]
     return [base + [phen[k] for k in phen_cols] for phen in gene.get(phen_key, [])]
 
-def build_gene_disease_parallel(data, gene_cols, phen_cols, phen_key="phenotypes",
-                                max_workers=None, chunksize=256):
+
+def build_gene_disease_parallel(
+    data, gene_cols, phen_cols, phen_key="phenotypes", max_workers=None, chunksize=256
+):
     """
     Parallel construction of the gene_disease table.
 
@@ -44,6 +47,7 @@ def build_gene_disease_parallel(data, gene_cols, phen_cols, phen_key="phenotypes
         )
         return list(chain.from_iterable(mapped))
 
+
 if __name__ == "__main__":
     gene_cols = ["mim_number", "approved_gene_symbol", "entrez_gene_id"]
     phen_cols = ["mim_number", "name", "mapping_key"]
@@ -54,10 +58,13 @@ if __name__ == "__main__":
     gene_disease = build_gene_disease_parallel(
         data, gene_cols, phen_cols, phen_key=phen_key, max_workers=None
     )
- 
+
     df = pd.DataFrame(
         gene_disease,
-        columns=["gene_mim_number"] + gene_cols[1:] + ["phen_mim_number"] + phen_cols[1:]
+        columns=["gene_mim_number"]
+        + gene_cols[1:]
+        + ["phen_mim_number"]
+        + phen_cols[1:],
     )
 
     def report(step):
@@ -72,22 +79,19 @@ if __name__ == "__main__":
     report("Initial dataset")
 
     # 1) remove rows where phenotype name starts with '?'
-    df = df[~df['name'].str.startswith('?', na=False)]
+    df = df[~df["name"].str.startswith("?", na=False)]
     report("After removing uncertain disease names ('?')")
 
     # 2) keep mapping == 1 or 3 (molecularly or positionally mapped)
-    df = df[pd.to_numeric(df['mapping_key'], errors='coerce') == 3]
+    df = df[pd.to_numeric(df["mapping_key"], errors="coerce") == 3]
     report("After keeping mapping keys = 3")
 
     # 3) drop the phenotype name column
-    df = df.drop(columns=['name'])
+    df = df.drop(columns=["name"])
 
     # 4) keep phenotypes with ≥3 genes (count distinct gene_mim_number per phenotype)
-    gene_counts = df.groupby('phen_mim_number')['entrez_gene_id'].transform('nunique')
+    gene_counts = df.groupby("phen_mim_number")["entrez_gene_id"].transform("nunique")
     df = df[gene_counts >= 3].reset_index(drop=True)
     report("After keeping diseases with ≥3 associated genes")
 
     print("\n✅ Dataset filtering complete.")
-
-    
-    
